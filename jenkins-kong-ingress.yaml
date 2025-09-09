@@ -10,12 +10,12 @@ metadata:
   namespace: jenkins
   annotations:
     konghq.com/strip-path: "false"
-    konghq.com/preserve-host: "false"
-    konghq.com/plugins: jenkins-fix-host
+    konghq.com/preserve-host: "true"
+    konghq.com/plugins: |
+      jenkins-headers-fix
 spec:
   ingressClassName: kong
   rules:
-  # Rule for domain access
   - host: jenkins.k8s.local
     http:
       paths:
@@ -26,7 +26,6 @@ spec:
             name: jenkins
             port:
               number: 8080
-  # Rule for IP-based access
   - http:
       paths:
       - path: /jenkins
@@ -37,18 +36,16 @@ spec:
             port:
               number: 8080
 ---
-# Kong Plugin chỉ fix Host header với port
+# Kong Plugin: Proper reverse proxy headers cho Jenkins (ROOT CAUSE FIX)
 apiVersion: configuration.konghq.com/v1
 kind: KongPlugin
 metadata:
-  name: jenkins-fix-host
+  name: jenkins-headers-fix
   namespace: jenkins
 config:
   add:
     headers:
+    - "X-Forwarded-Host:192.168.0.154:30080"
+    - "X-Forwarded-Proto:http" 
     - "X-Forwarded-Port:30080"
-    - "X-Forwarded-Proto:http"
-  replace:
-    headers:
-    - "Host:192.168.0.154:30080"
 plugin: request-transformer
