@@ -1,0 +1,19 @@
+replicaCount: 2
+namespace: fastapi
+
+image:
+  repository: b21dccn222/fastapi-k8s
+  tag: v2
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 8000
+
+ingress:
+  enabled: true
+  className: nginx
+  host: fastapi.k8s.local
+  path: /api/(.*)
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$1

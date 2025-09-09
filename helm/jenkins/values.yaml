@@ -1,0 +1,59 @@
+replicaCount: 1
+namespace: jenkins
+
+image:
+  repository: jenkins/jenkins
+  tag: "2.452.2-lts"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+  agentPort: 50000
+
+persistence:
+  enabled: true
+  type: hostPath  # Dùng hostPath cho control-plane
+  hostPath: /mnt/jenkins-data
+  size: 10Gi  # Tăng lên 10Gi cho Jenkins data
+  accessMode: ReadWriteOnce
+  nodeSelector: k8s-cmc-micace-control-plane-nljnh
+  # storageClass: standard  # Uncomment nếu dùng dynamic provisioning
+
+ingress:
+  enabled: false  # Sử dụng Kong thay vì Nginx
+  className: nginx
+  host: jenkins.k8s.local
+  path: /jenkins
+  annotations:
+    nginx.ingress.kubernetes.io/app-root: /jenkins
+
+env:
+  - name: JENKINS_OPTS
+    value: "--prefix=/jenkins"
+  - name: DOCKER_HOST
+    value: "unix:///var/run/docker.sock"
+  - name: JENKINS_URL
+    value: "http://192.168.0.154:30080/jenkins/"
+  - name: JENKINS_ROOT_URL
+    value: "http://192.168.0.154:30080/jenkins/"
+
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "500m"
+  limits:
+    memory: "2Gi"
+    cpu: "2000m"
+
+# Security context - QUAN TRỌNG cho Docker access
+securityContext:
+  runAsUser: 1000  # Jenkins user
+  runAsGroup: 1000
+  fsGroup: 1000
+
+# Toleration cho control-plane nodes
+tolerations:
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule

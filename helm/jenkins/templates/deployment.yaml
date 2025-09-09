@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "jenkins.fullname" . }}
+  namespace: {{ .Values.namespace | default "jenkins" }}
+  labels:
+    {{- include "jenkins.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "jenkins.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "jenkins.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: jenkins-sa
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+        fsGroup: 0
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            runAsUser: 0
+            privileged: true
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+            - name: agent
+              containerPort: {{ .Values.service.agentPort }}
+              protocol: TCP
+          env:
+            - name: JENKINS_OPTS
+              value: "--prefix=/jenkins"
+            - name: DOCKER_HOST
+              value: "tcp://localhost:2375"
+          volumeMounts:
+            - name: jenkins-home
+              mountPath: /var/jenkins_home
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /jenkins/login
+              port: http
+            initialDelaySeconds: 90
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /jenkins/login
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 10
+        - name: docker-dind
+          image: docker:24-dind
+          securityContext:
+            privileged: true
+          env:
+            - name: DOCKER_TLS_CERTDIR
+              value: ""
+          volumeMounts:
+            - name: jenkins-home
+              mountPath: /var/jenkins_home
+            - name: docker-storage
+              mountPath: /var/lib/docker
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+      {{- if and .Values.persistence.enabled (eq .Values.persistence.type "hostPath") }}
+      nodeSelector:
+        kubernetes.io/hostname: {{ .Values.persistence.nodeSelector }}
+      {{- end }}
+      volumes:
+        - name: jenkins-home
+          persistentVolumeClaim:
+            claimName: {{ include "jenkins.fullname" . }}-pvc
+        - name: docker-storage
+          emptyDir: {}

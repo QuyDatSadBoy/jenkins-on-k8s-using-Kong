@@ -1,0 +1,125 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kong
+---
+# PersistentVolume sử dụng hostPath cho control-plane nodes
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: kong-postgres-pv
+  namespace: kong
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: manual
+  hostPath:
+    path: /mnt/kong-postgres-data
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - k8s-cmc-micace-control-plane-nljnh  # Node 1
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kong-postgres-pvc
+  namespace: kong
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: manual
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kong-postgres-config
+  namespace: kong
+data:
+  POSTGRES_DB: "kong"
+  POSTGRES_USER: "kong"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kong-postgres-secret
+  namespace: kong
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: "kongpassword123"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kong-postgres
+  namespace: kong
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kong-postgres
+  template:
+    metadata:
+      labels:
+        app: kong-postgres
+    spec:
+      # Chỉ định node cụ thể để chạy PostgreSQL
+      nodeSelector:
+        kubernetes.io/hostname: k8s-cmc-micace-control-plane-nljnh
+      # Tolerations cho control-plane nodes
+      tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+        envFrom:
+        - configMapRef:
+            name: kong-postgres-config
+        - secretRef:
+            name: kong-postgres-secret
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+          subPath: postgres
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: kong-postgres-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong-postgres
+  namespace: kong
+spec:
+  selector:
+    app: kong-postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+  type: ClusterIP

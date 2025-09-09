@@ -1,0 +1,124 @@
+# kong-values.yaml
+deployment:
+  # mode: traditional # Config gốc
+  # Cấu hình deployment mode mới
+  kong:
+    enabled: true
+    
+# Bật chế độ Kong Ingress Controller
+ingressController:
+  enabled: true
+  # installCRDs: false # Config gốc - để Helm tự cài đặt CRDs
+  installCRDs: false # Tắt vì CRDs đã tồn tại
+  image:
+    repository: kong/kubernetes-ingress-controller
+    tag: "3.0"
+    
+# Kong image configuration    
+image:
+  repository: kong
+  # tag: "3.4" # Config gốc
+  tag: "3.9.1-ubuntu" # Sử dụng version mới nhất như yêu cầu
+  pullPolicy: IfNotPresent
+
+# Cấu hình môi trường cho Kong
+env:
+  # Config database gốc (đã comment)
+  # database: "postgres"
+  # pg_host: "keycloak-db-postgresql.default.svc.cluster.local"
+  # pg_port: 5432
+  # pg_user: "postgres"
+  # pg_password: "adminace123"
+  # pg_database: "postgres"
+  # pg_schema: "public"
+  
+  # Config database mới cho Kong riêng
+  database: "postgres"
+  pg_host: "kong-postgres.kong.svc.cluster.local" # PostgreSQL riêng cho Kong
+  pg_port: "5432"
+  pg_user: "kong"
+  pg_password: "kongpassword123"
+  pg_database: "kong"
+  
+  # Admin listen config
+  admin_listen: "0.0.0.0:8001"
+  admin_gui_listen: "0.0.0.0:8002"
+  
+  # Ingress Class - giữ nguyên
+  ingress_class: kong
+  
+  # plugins: "bundled,jwt,request-transformer" # Config gốc
+  # Plugins mở rộng thêm CORS và rate-limiting
+  plugins: "bundled,cors,jwt,request-transformer,rate-limiting"
+  
+  # Nginx worker processes
+  nginx_worker_processes: "2"
+
+# Cấu hình cách expose Kong ra ngoài
+proxy:
+  enabled: true
+  # type: LoadBalancer # Config gốc
+  type: NodePort # Dùng NodePort cho on-premise cluster
+  http:
+    enabled: true
+    servicePort: 80
+    containerPort: 8000
+    nodePort: 30080 # Thêm NodePort cố định
+  tls:
+    enabled: true
+    servicePort: 443
+    containerPort: 8443
+    nodePort: 30443 # Thêm NodePort cố định
+  ingress:
+    enabled: false # Không cần ingress cho proxy
+    
+admin:
+  enabled: true
+  type: ClusterIP # Giữ nguyên ClusterIP
+  http:
+    enabled: true
+    servicePort: 8001
+    containerPort: 8001
+  tls:
+    enabled: false
+    
+manager:
+  enabled: true
+  type: ClusterIP # Giữ nguyên ClusterIP  
+  http:
+    enabled: true
+    servicePort: 8002
+    containerPort: 8002
+  tls:
+    enabled: false
+
+# Thêm cấu hình Resources
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+# Thêm cấu hình Autoscaling
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+# Thêm cấu hình Migration
+migrations:
+  enabled: true
+  preUpgrade: true
+  postUpgrade: false
+
+# Tolerations cho control-plane nodes (cluster 3 control-plane)
+tolerations:
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
+  - key: node-role.kubernetes.io/master
+    operator: Exists
+    effect: NoSchedule

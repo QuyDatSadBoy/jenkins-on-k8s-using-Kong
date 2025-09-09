@@ -1,0 +1,21 @@
+{{- if .Values.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "jenkins.fullname" . }}-pvc
+  namespace: {{ .Values.namespace | default "jenkins" }}
+  labels:
+    {{- include "jenkins.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.persistence.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size }}
+  {{- if eq .Values.persistence.type "hostPath" }}
+  storageClassName: ""  # Empty string cho hostPath
+  volumeName: {{ include "jenkins.fullname" . }}-pv
+  {{- else }}
+  storageClassName: {{ .Values.persistence.storageClass | default "standard" }}
+  {{- end }}
+{{- end }}

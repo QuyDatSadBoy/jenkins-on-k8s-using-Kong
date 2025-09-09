@@ -1,0 +1,29 @@
+{{- if and .Values.persistence.enabled (eq .Values.persistence.type "hostPath") }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "jenkins.fullname" . }}-pv
+  labels:
+    {{- include "jenkins.labels" . | nindent 4 }}
+spec:
+  capacity:
+    storage: {{ .Values.persistence.size }}
+  accessModes:
+    - {{ .Values.persistence.accessMode }}
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""  # Empty string for hostPath
+  hostPath:
+    path: {{ .Values.persistence.hostPath }}
+    # Don't use type field - causes issues
+  claimRef:
+    name: {{ include "jenkins.fullname" . }}-pvc
+    namespace: {{ .Values.namespace | default "jenkins" }}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - {{ .Values.persistence.nodeSelector }}
+{{- end }}

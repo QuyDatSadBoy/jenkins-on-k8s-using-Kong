@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fastapi
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fastapi-kong-ingress
+  namespace: fastapi
+  annotations:
+    konghq.com/strip-path: "true"
+    konghq.com/preserve-host: "true"
+    # CORS configuration
+    konghq.com/plugins: |
+      cors-fastapi
+spec:
+  ingressClassName: kong
+  rules:
+  # Rule for domain access
+  - host: fastapi.k8s.local
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: fastapi-service
+            port:
+              number: 8000
+  # Rule for IP-based access (any host)
+  - http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: fastapi-service
+            port:
+              number: 8000
+---
+# Kong Plugin for CORS
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: cors-fastapi
+  namespace: fastapi
+config:
+  origins:
+  - "*"
+  methods:
+  - GET
+  - POST
+  - PUT
+  - DELETE
+  - OPTIONS
+  - HEAD
+  - PATCH
+  headers:
+  - Accept
+  - Accept-Version
+  - Content-Length
+  - Content-MD5
+  - Content-Type
+  - Date
+  - X-Auth-Token
+  - Authorization
+  exposed_headers:
+  - X-Auth-Token
+  credentials: true
+  max_age: 3600
+plugin: cors
